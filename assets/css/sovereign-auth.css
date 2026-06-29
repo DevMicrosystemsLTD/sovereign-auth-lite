@@ -1,0 +1,432 @@
+/*
+ * Sovereign Auth — Stylesheet  v1.1.0
+ *
+ * Self-contained. Zero external fonts. Zero framework dependency.
+ * Override :root custom properties to rebrand without touching anything else.
+ *
+ * WP NATIVE FIELD SUPPRESSION — three layers (outermost wins a race):
+ *   1. PHP login_head hook → inline <style id="sovauth-pre"> in <head>
+ *   2. This file (loaded immediately after)
+ *   3. JS init() → element.style.setProperty('display','none','important')
+ */
+
+/* ═══════════════════════════════════════════════
+   DESIGN TOKENS
+═══════════════════════════════════════════════ */
+:root {
+    --sov-bg:            #07070d;
+    --sov-surface:       #11111b;
+    --sov-surface-hover: #181828;
+    --sov-border:        #1e1e30;
+    --sov-accent:        #6366f1;
+    --sov-accent-hover:  #818cf8;
+    --sov-accent-dim:    rgba(99,102,241,.15);
+    --sov-success:       #22c55e;
+    --sov-error:         #f87171;
+    --sov-error-dim:     rgba(248,113,113,.15);
+    --sov-warning-bg:    #2d1b00;
+    --sov-warning-txt:   #fb923c;
+    --sov-text:          #e2e8f0;
+    --sov-text-muted:    #64748b;
+    --sov-text-faint:    #334155;
+    --sov-radius:        10px;
+    --sov-radius-sm:     6px;
+    --sov-font:          system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --sov-mono:          'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    --sov-shadow:        0 4px 24px rgba(0,0,0,.45);
+    --sov-transition:    .18s ease;
+}
+
+/* ═══════════════════════════════════════════════
+   WP NATIVE FIELD SUPPRESSION  (layer 2 of 3)
+   Belt-and-suspenders on top of the PHP inline
+   style block. Covers every WP version and most
+   third-party themes.
+═══════════════════════════════════════════════ */
+
+/* All direct children of both forms except our root */
+#loginform    > *:not(.sovauth-root),
+#registerform > *:not(.sovauth-root) { display: none !important; }
+
+/* Named / classed elements that appear at various depths
+   across different WP versions and login-page customisations */
+#user_login,
+#user_pass,
+#user_email,
+#wp-submit,
+label[for="user_login"],
+label[for="user_pass"],
+label[for="user_email"],
+.user-pass-wrap,
+.wp-pwd,
+.forgetmenot,
+.login-remember,
+.login-submit,
+#nav,
+#backtoblog,
+#login_error,
+.message,
+.login .privacy-policy-page-link { display: none !important; }
+
+/* ═══════════════════════════════════════════════
+   BASE & RESET (scoped to .sovauth-root)
+═══════════════════════════════════════════════ */
+.sovauth-root *,
+.sovauth-root *::before,
+.sovauth-root *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+.sovauth-root {
+    font-family: var(--sov-font);
+    color: var(--sov-text);
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+    padding-top: 8px;
+}
+
+/* ═══════════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════════ */
+.sov-tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--sov-surface);
+    border: 1px solid var(--sov-border);
+    border-radius: var(--sov-radius);
+    padding: 4px;
+    margin-bottom: 20px;
+}
+
+.sov-tab {
+    flex: 1;
+    padding: 9px 12px;
+    border: none;
+    border-radius: var(--sov-radius-sm);
+    background: transparent;
+    color: var(--sov-text-muted);
+    font: 500 13px var(--sov-font);
+    cursor: pointer;
+    transition: background var(--sov-transition), color var(--sov-transition);
+    white-space: nowrap;
+}
+
+.sov-tab:hover  { background: var(--sov-surface-hover); color: var(--sov-text); }
+.sov-tab.active { background: var(--sov-accent-dim);    color: var(--sov-accent-hover); }
+
+/* ═══════════════════════════════════════════════
+   PANELS & STEPS
+═══════════════════════════════════════════════ */
+.sov-panel,
+.sov-step {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sov-step-title {
+    font: 600 16px var(--sov-font);
+    color: var(--sov-text);
+    margin-bottom: 4px;
+}
+
+.sov-lead {
+    font-size: 13px;
+    color: var(--sov-text-muted);
+    line-height: 1.55;
+}
+
+.sov-note {
+    font-size: 12px;
+    color: var(--sov-text-faint);
+}
+
+/* ═══════════════════════════════════════════════
+   FORM INPUTS
+═══════════════════════════════════════════════ */
+.sov-input {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--sov-surface);
+    border: 1px solid var(--sov-border);
+    border-radius: var(--sov-radius-sm);
+    color: var(--sov-text);
+    font: 14px var(--sov-font);
+    outline: none;
+    transition: border-color var(--sov-transition), box-shadow var(--sov-transition);
+}
+
+.sov-input:focus {
+    border-color: var(--sov-accent);
+    box-shadow: 0 0 0 3px var(--sov-accent-dim);
+}
+
+.sov-input::placeholder { color: var(--sov-text-faint); }
+
+/* HOTFIX UX: error state for the username field on 409 */
+.sov-input--error,
+.sov-input--error:focus {
+    border-color: var(--sov-error) !important;
+    box-shadow: 0 0 0 3px var(--sov-error-dim) !important;
+}
+
+.sov-textarea {
+    min-height: 76px;
+    resize: vertical;
+    font-family: var(--sov-mono);
+    line-height: 1.5;
+}
+
+.sov-checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--sov-text-muted);
+    line-height: 1.5;
+    cursor: pointer;
+}
+
+.sov-checkbox-row input[type="checkbox"] {
+    margin-top: 2px;
+    accent-color: var(--sov-accent);
+    cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════════ */
+.sov-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border: 1px solid transparent;
+    border-radius: var(--sov-radius-sm);
+    font: 600 13px var(--sov-font);
+    cursor: pointer;
+    text-decoration: none;
+    transition: background var(--sov-transition), opacity var(--sov-transition), box-shadow var(--sov-transition);
+    white-space: nowrap;
+    user-select: none;
+}
+
+.sov-btn:disabled {
+    opacity: .4;
+    cursor: not-allowed;
+}
+
+.sov-btn--primary {
+    background: var(--sov-accent);
+    color: #fff;
+    width: 100%;
+}
+.sov-btn--primary:not(:disabled):hover {
+    background: var(--sov-accent-hover);
+    box-shadow: 0 0 0 3px var(--sov-accent-dim);
+}
+
+.sov-btn--secondary {
+    background: var(--sov-surface);
+    border-color: var(--sov-border);
+    color: var(--sov-text);
+}
+.sov-btn--secondary:not(:disabled):hover { background: var(--sov-surface-hover); }
+
+.sov-btn--outline {
+    background: transparent;
+    border-color: var(--sov-border);
+    color: var(--sov-text-muted);
+}
+.sov-btn--outline:not(:disabled):hover {
+    border-color: var(--sov-accent);
+    color: var(--sov-accent-hover);
+}
+
+.sov-btn--large { padding: 13px 20px; font-size: 15px; }
+
+.sov-btn-row {
+    display: flex;
+    gap: 8px;
+}
+.sov-btn-row .sov-btn { 
+    flex: 1;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* ═══════════════════════════════════════════════
+   STATUS & ERROR MESSAGES
+═══════════════════════════════════════════════ */
+.sov-status {
+    font-size: 12px;
+    color: var(--sov-text-muted);
+    text-align: center;
+    min-height: 18px;
+    transition: color var(--sov-transition);
+}
+.sov-status--success { color: var(--sov-success); }
+.sov-status--error   { color: var(--sov-error);   }
+.sov-status--info    { color: var(--sov-text-muted); }
+
+.sov-error {
+    padding: 10px 14px;
+    background: rgba(248,113,113,.10);
+    border: 1px solid rgba(248,113,113,.30);
+    border-radius: var(--sov-radius-sm);
+    color: var(--sov-error);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.sov-warning {
+    padding: 10px 14px;
+    background: var(--sov-warning-bg);
+    border: 1px solid rgba(251,146,60,.25);
+    border-radius: var(--sov-radius-sm);
+    color: var(--sov-warning-txt);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.sov-hint {
+    font-size: 12px;
+    color: var(--sov-text-muted);
+    text-align: center;
+}
+
+/* ═══════════════════════════════════════════════
+   QR CODE BOX
+═══════════════════════════════════════════════ */
+.sov-qr-box {
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+    background: #ffffff;
+    border-radius: var(--sov-radius);
+    border: 2px solid var(--sov-border);
+}
+
+.sov-qr-box img,
+.sov-qr-box canvas {
+    display: block;
+    max-width: 220px;
+    height: auto;
+    border-radius: 4px;
+}
+
+/* ═══════════════════════════════════════════════
+   PHRASE GRID — 12-word display (registration)
+═══════════════════════════════════════════════ */
+.sov-phrase-grid {
+    display: grid;
+    /* FIX CRITICO: Cambiato da 3 a 2 colonne pe' fa entrà le parole lunghe! */
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 8px;
+}
+
+.sov-phrase-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px; /* FIX: ridotto un pelo er padding */
+    background: var(--sov-surface);
+    border: 1px solid var(--sov-border);
+    border-radius: var(--sov-radius-sm);
+    font: 12px var(--sov-mono); /* FIX: font adattato per sicurezza */
+    color: var(--sov-text);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.sov-phrase-idx {
+    color: var(--sov-text-faint);
+    font-size: 11px;
+    min-width: 14px;
+}
+
+/* ═══════════════════════════════════════════════
+   CAMERA VIEWFINDER
+═══════════════════════════════════════════════ */
+.sov-video {
+    width: 100%;
+    max-height: 240px;
+    object-fit: cover;
+    border-radius: var(--sov-radius-sm);
+    background: #000;
+    border: 1px solid var(--sov-border);
+}
+
+.sov-canvas {
+    display: none;  /* offscreen jsQR decode buffer — never shown */
+}
+
+/* ═══════════════════════════════════════════════
+   RECOVERY PANEL LAYOUT
+═══════════════════════════════════════════════ */
+.sov-recovery-method {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sov-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--sov-text-faint);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.sov-divider::before,
+.sov-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--sov-border);
+}
+
+/* ═══════════════════════════════════════════════
+   UTILITY
+═══════════════════════════════════════════════ */
+.sov-hidden { display: none !important; }
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════════ */
+@media ( max-width: 480px ) {
+    .sov-btn-row     { flex-direction: column; }
+    .sov-qr-box      { padding: 12px; }
+    .sov-phrase-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.sov-phrase-inputs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 15px;
+}
+.sov-phrase-input {
+    width: 100%;
+    padding: 8px 6px;
+    background: var(--sov-surface);
+    border: 1px solid var(--sov-border);
+    border-radius: var(--sov-radius-sm);
+    color: var(--sov-text);
+    font: 13px var(--sov-font);
+    outline: none;
+    text-align: center;
+    transition: border-color var(--sov-transition), box-shadow var(--sov-transition);
+}
+.sov-phrase-input:focus {
+    border-color: var(--sov-accent);
+    box-shadow: 0 0 0 2px var(--sov-accent-dim);
+}
