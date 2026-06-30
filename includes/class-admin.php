@@ -7,16 +7,7 @@
  *   1. Security & Anonymity — Tor/onion mode toggle.
  *
  *   2. Plugin Status — real, useful diagnostics: PHP/HTTPS prerequisites,
- *      how many users have biometrics registered, how many have a
- *      recovery phrase configured, current version, and real license
- *      status (via the Freemius SDK — see sovereign-auth.php).
- *
- * NOTE: the local "License Key" field that used to live on this page
- * (format-check only, no real verification) has been removed. License
- * activation/account management is now handled by Freemius's own
- * auto-generated screen, reachable from this same admin menu once the
- * SDK is configured. Don't re-add a custom license field here — it
- * would just create a second, conflicting source of truth.
+ *      how many users have biometrics registered, current version.
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -110,13 +101,12 @@ final class SovAuth_Admin {
         /* ── Plugin Status ── */
         echo '<h2 class="title">Plugin Status</h2>';
         echo '<table class="widefat striped" style="max-width:640px;"><tbody>';
-        $licensed = function_exists( 'sav_fs' ) && sav_fs()->can_use_premium_code();
-        $this->statusRow( 'License (Freemius)', $licensed ? 'Active' : 'Inactive / Trial', $licensed );
+        $this->statusRow( 'Edition', 'Sovereign Auth Lite (Free)', true );
         $this->statusRow( 'Version', SOVAUTH_VER, true );
         $this->statusRow( 'PHP version', PHP_VERSION, version_compare( PHP_VERSION, '8.1', '>=' ) );
         $this->statusRow( 'HTTPS (required for WebAuthn)', is_ssl() ? 'Enabled' : 'Not detected', is_ssl() );
         $this->statusRow( 'Users with biometric registered', (string) $stats['biometric_users'], true );
-        $this->statusRow( 'Users with recovery phrase configured', (string) $stats['recovery_users'], true );
+
         $this->statusRow( 'Emergency access (wp-config.php)', Sovereign_Auth::emergency_access_active() ? 'ACTIVE — Sovereign Auth UI is disabled' : 'Off', ! Sovereign_Auth::emergency_access_active() );
         echo '</tbody></table>';
 
@@ -157,7 +147,7 @@ final class SovAuth_Admin {
         wp_enqueue_script( 'sovereign-auth-dashboard', SOVAUTH_URL . 'assets/js/sovereign-auth-dashboard.js', [ 'qrcodejs' ], SOVAUTH_VER, true );
         
         wp_localize_script( 'sovereign-auth-dashboard', 'SovAuthDash', [
-            'isPremium'    => function_exists( 'sav_fs' ) && sav_fs()->can_use_premium_code(),
+            'isPremium'    => false,
             'api'          => esc_url( rest_url( 'sovereign-auth/v1' ) ),
             'nonce'        => wp_create_nonce( 'wp_rest' ),
             'powChallenge' => wp_create_nonce( 'sovauth_pow' ),

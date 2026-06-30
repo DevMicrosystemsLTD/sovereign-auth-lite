@@ -3,7 +3,7 @@
 /**
  * Plugin Name:       Sovereign Auth
  * Plugin URI:        https://dev-net.it
- * Description:       Zero-Knowledge Biometric Gateway — WebAuthn/FIDO2 + 12-Word Recovery Phrase (QR + manual). No email. No password. No traces.
+ * Description:       Zero-Knowledge Biometric Gateway — WebAuthn/FIDO2. No email. No password. No traces.
  * Version:           1.4.0
  * Author:            dev-net.it
  * Author URI:        https://dev-net.it
@@ -16,64 +16,7 @@
  * License key validation: https://dev-net.it/verify
  */
 defined( 'ABSPATH' ) || exit;
-/* ═══════════════════════════════════════════════════════════
-   FREEMIUS SDK BOOTSTRAP
-   Must run before anything else in this file (Freemius requirement).
 
-   ⚠ TODO BEFORE GOING LIVE — 2 values to fill in:
-     'id'         → from your Freemius dashboard, Sovereign Auth product
-     'public_key' → same place, "SDK" / Integration tab
-
-   If you haven't completed the "SDK integration form" on the Freemius
-   dashboard yet for this product, do that first — it auto-generates
-   this exact snippet with both values already filled in. Just copy
-   the id/public_key from theirs into here (keep the menu/parent and
-   is_org_compliant choices below — they're set deliberately).
-
-   Never commit a 'secret_key' into this file — that's sandbox-only,
-   per Freemius's own docs, and must not ship in distributed code.
-═══════════════════════════════════════════════════════════ */
-if ( !function_exists( 'sav_fs' ) ) {
-    // Create a helper function for easy SDK access.
-    function sav_fs() {
-        global $sav_fs;
-        if ( !isset( $sav_fs ) ) {
-            // Include Freemius SDK.
-            // Modificato per puntare alla cartella 'freemius/' esistente invece che 'vendor/freemius/'
-            require_once dirname( __FILE__ ) . '/freemius/start.php';
-            $sav_fs = fs_dynamic_init( array(
-                'id'               => '32959',
-                'slug'             => 'sovereign-auth-v140',
-                'type'             => 'plugin',
-                'public_key'       => 'pk_e97e5f1bdc536ea48548c0eb7e9b0',
-                'is_premium'       => false,
-                'is_premium_only'  => false,
-                'has_addons'       => false,
-                'has_paid_plans'   => true,
-                'is_org_compliant' => true,
-                'menu'             => array(
-                    'slug'    => 'sovereign-auth',
-                    'parent'  => array(
-                        'slug' => 'options-general.php',
-                    ),
-                    'support' => false,
-                ),
-                'is_live'          => true,
-            ) );
-        }
-        return $sav_fs;
-    }
-
-    // Init Freemius.
-    sav_fs();
-    // Signal that SDK was initiated.
-    do_action( 'sav_fs_loaded' );
-    // Setup uninstall hook for Freemius
-    sav_fs()->add_action( 'after_uninstall', function () {
-        require_once dirname( __FILE__ ) . '/includes/class-uninstall.php';
-        SovAuth_Uninstall::cleanup();
-    } );
-}
 /* ═══════════════════════════════════════════════════════════
    CONSTANTS
 ═══════════════════════════════════════════════════════════ */
@@ -185,16 +128,7 @@ final class Sovereign_Auth {
         add_action( 'login_form', [$this, 'inject_login_ui'] );
         add_action( 'register_form', [$this, 'inject_register_ui'] );
         add_action( 'login_init', [$this, 'handle_admin_setup_route'] );
-        // Suppress WP's own registration validations for our flow
-        if ( function_exists( 'sav_fs' ) && sav_fs()->can_use_premium_code() ) {
-            add_filter( 'registration_errors', [$this, 'strip_registration_errors'], 30 );
-            add_filter(
-                'is_email',
-                [$this, 'whitelist_synthetic_email'],
-                10,
-                2
-            );
-        }
+
     }
 
     /**
@@ -235,10 +169,7 @@ final class Sovereign_Auth {
      * in wp-config.php. See the docblock in init() for the full rationale.
      */
     public static function emergency_access_active() : bool {
-        if ( !function_exists( 'sav_fs' ) || !sav_fs()->can_use_premium_code() ) {
-            return false;
-        }
-        return defined( 'SOVAUTH_EMERGENCY_ACCESS' ) && true === SOVAUTH_EMERGENCY_ACCESS;
+        return false;
     }
 
     /* ── Critical CSS (HOTFIX UI — double-username prevention) ─ */
@@ -272,23 +203,9 @@ final class Sovereign_Auth {
     /* ── Asset enqueue ─────────────────────────────────────── */
     public function enqueue_assets() : void {
         wp_enqueue_script(
-            'jsqr',
-            'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
-            [],
-            '1.4.0',
-            true
-        );
-        wp_enqueue_script(
-            'qrcodejs',
-            'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js',
-            [],
-            '1.0.0',
-            true
-        );
-        wp_enqueue_script(
             'sovereign-auth',
             SOVAUTH_URL . 'assets/js/sovereign-auth-v2.js',
-            ['jsqr', 'qrcodejs'],
+            [],
             SOVAUTH_VER,
             true
         );
@@ -301,7 +218,7 @@ final class Sovereign_Auth {
         wp_localize_script( 'sovereign-auth', 'SovAuthConfig', [
             'isAdminSetup' => ( isset( $_GET['action'] ) && $_GET['action'] === 'sovauth_admin_setup' ? 1 : 0 ),
             'currentUser'  => ( is_user_logged_in() ? wp_get_current_user()->user_login : '' ),
-            'isPremium'    => function_exists( 'sav_fs' ) && sav_fs()->can_use_premium_code(),
+            'isPremium'    => false,
             'api'          => esc_url( rest_url( 'sovereign-auth/v1' ) ),
             'nonce'        => wp_create_nonce( 'wp_rest' ),
             'powChallenge' => wp_create_nonce( 'sovauth_pow' ),
@@ -315,30 +232,18 @@ final class Sovereign_Auth {
                 'errWebauthnSupport' => __( 'WebAuthn not supported on this device or browser.', 'sovereign-auth' ),
                 'errNoCred'          => __( 'No credential returned from authenticator.', 'sovereign-auth' ),
                 'errAuthCancel'      => __( 'Authentication cancelled.', 'sovereign-auth' ),
-                'errNoQR'            => __( 'No QR code detected in this image.', 'sovereign-auth' ),
-                'errLoadImg'         => __( 'Failed to load image.', 'sovereign-auth' ),
-                'errReadFile'        => __( 'Failed to read file.', 'sovereign-auth' ),
                 'tabBio'             => __( '🔐 Biometric', 'sovereign-auth' ),
-                'tabRec'             => __( '🔑 Recovery', 'sovereign-auth' ),
                 'btnSignInBio'       => __( 'Sign in with Biometric', 'sovereign-auth' ),
                 'lblBioStatus'       => __( 'Face ID · Touch ID · Windows Hello', 'sovereign-auth' ),
-                'lblScanQR'          => __( 'Scan or upload your recovery QR code', 'sovereign-auth' ),
-                'btnOpenCamera'      => __( '📷 Open Camera', 'sovereign-auth' ),
-                'btnUploadQR'        => __( '🖼 Upload QR Image', 'sovereign-auth' ),
-                'lblOr'              => __( 'or', 'sovereign-auth' ),
-                'lblTypePhrase'      => __( 'Type your 12-word recovery phrase', 'sovereign-auth' ),
-                'btnVerifySignIn'    => __( '✓ Verify & Sign In', 'sovereign-auth' ),
                 'statusWaitBio'      => __( 'Waiting for biometric…', 'sovereign-auth' ),
                 'statusAuthSuccess'  => __( 'Authenticated ✓', 'sovereign-auth' ),
                 'statusAuthFail'     => __( 'Failed — try again', 'sovereign-auth' ),
                 'statusVerifying'    => __( 'Verifying…', 'sovereign-auth' ),
-                'statusScanAgain'    => __( 'Try scanning again', 'sovereign-auth' ),
-                'statusPointCamera'  => __( 'Point camera at your QR code…', 'sovereign-auth' ),
-                'errCamera'          => __( 'Camera error: ', 'sovereign-auth' ),
-                'errTryUpload'       => __( '. Try uploading an image instead.', 'sovereign-auth' ),
-                'lblQRDetected'      => __( '✓ QR detected', 'sovereign-auth' ),
-                'lblQRLoaded'        => __( '✓ QR loaded', 'sovereign-auth' ),
-                'errEnterPhrase'     => __( 'Enter your 12-word recovery phrase.', 'sovereign-auth' ),
+                'errEmpty'           => __( 'Please enter a value.', 'sovereign-auth' ),
+                'tabReg'             => __( 'Sign Up', 'sovereign-auth' ),
+                'tabAuth'            => __( '🔑 Login', 'sovereign-auth' ),
+                'lblUser'            => __( 'Choose a Username', 'sovereign-auth' ),
+                'lblEmail'           => __( 'Email (Optional)', 'sovereign-auth' ),
                 'phUsername'         => __( 'Choose a username', 'sovereign-auth' ),
                 'btnContBio'         => __( 'Continue → Biometric Setup', 'sovereign-auth' ),
                 'lblNoEmail'         => __( 'No email. No password. Your biometric is the key.', 'sovereign-auth' ),
@@ -346,18 +251,11 @@ final class Sovereign_Auth {
                 'lblConfirmBio'      => __( 'Confirm with Face ID, Touch ID, or Windows Hello', 'sovereign-auth' ),
                 'lblStep2'           => __( 'Step 2 of 3: Register Biometric', 'sovereign-auth' ),
                 'lblBioLocal'        => __( 'Your biometric never leaves this device.', 'sovereign-auth' ),
-                'lblWarning'         => __( '⚠ This is your ONLY way back in if you lose this device. Neither the QR nor the words will be shown again. This is not a cryptocurrency wallet — it only restores access to this account.', 'sovereign-auth' ),
-                'btnDlQR'            => __( '⬇ Download QR', 'sovereign-auth' ),
-                'btnCopyWords'       => __( '⧉ Copy Words', 'sovereign-auth' ),
-                'lblSavedQR'         => __( "I've saved my recovery QR and / or the 12 words", 'sovereign-auth' ),
                 'btnContDash'        => __( 'Continue to Dashboard →', 'sovereign-auth' ),
-                'lblStep3'           => __( 'Step 3 of 3: Save Your Recovery Suite', 'sovereign-auth' ),
                 'errUserLength'      => __( 'Username must be at least 3 characters.', 'sovereign-auth' ),
                 'errUserTaken'       => __( 'Username already in use, please choose another.', 'sovereign-auth' ),
                 'statusWaitBioConf'  => __( 'Waiting for biometric confirmation…', 'sovereign-auth' ),
                 'statusFailed'       => __( 'Failed — ', 'sovereign-auth' ),
-                'lblCopied'          => __( '✓ Copied', 'sovereign-auth' ),
-                'errClipboard'       => __( 'Clipboard unavailable — please copy the words manually.', 'sovereign-auth' ),
                 'btnGoRegister'      => __( 'New user? Register', 'sovereign-auth' ),
             ],
         ] );

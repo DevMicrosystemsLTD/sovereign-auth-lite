@@ -232,66 +232,7 @@
                 device_name: getDeviceName(),
             } );
 
-            if ( res.success && res.recovery_phrase && res.recovery_phrase.length > 0 ) {
-                await new Promise((resolve) => {
-                    const overlay = document.createElement('div');
-                    overlay.style.position = 'fixed';
-                    overlay.style.top = '0'; overlay.style.left = '0';
-                    overlay.style.width = '100vw'; overlay.style.height = '100vh';
-                    overlay.style.backgroundColor = 'rgba(0,0,0,0.85)';
-                    overlay.style.zIndex = '999999';
-                    overlay.style.display = 'flex';
-                    overlay.style.alignItems = 'center';
-                    overlay.style.justifyContent = 'center';
 
-                    const modal = document.createElement('div');
-                    modal.style.backgroundColor = '#1a1a24';
-                    modal.style.color = '#fff';
-                    modal.style.padding = '30px';
-                    modal.style.borderRadius = '12px';
-                    modal.style.maxWidth = '600px';
-                    modal.style.width = '100%';
-                    modal.style.textAlign = 'center';
-                    modal.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
-                    modal.style.border = '1px solid #333';
-
-                    modal.innerHTML = `
-                        <h2 style="color: #00ff66; margin-top: 0; font-family: sans-serif;">Dispositivo Registrato!</h2>
-                        <p style="font-size: 14px; color: #ccc; font-family: sans-serif; line-height: 1.5; margin-bottom: 20px;">
-                            Questo è il tuo <strong>PRIMO</strong> dispositivo. Devi salvare TASSATIVAMENTE questa frase di recupero.<br>
-                            Se perdi il dispositivo, questa sarà l'UNICA via per accedere.
-                        </p>
-                        <div id="sov-dash-qr" style="margin: 20px auto; display: flex; justify-content: center; padding: 15px; background: #fff; border-radius: 8px; width: max-content;"></div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; text-align: left;">
-                            ${res.recovery_phrase.map((w, i) => `
-                                <div style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); font-family: monospace; font-size: 15px;">
-                                    <span style="color: #666; font-size: 12px; margin-right: 5px;">${i+1}.</span> <span style="color: #fff; font-weight: bold;">${w}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <button id="sov-dash-close-modal" style="background: #00ff66; color: #000; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer;">Ho salvato le chiavi, chiudi</button>
-                    `;
-
-                    overlay.appendChild(modal);
-                    document.body.appendChild(overlay);
-
-                    if (typeof QRCode !== 'undefined') {
-                        new QRCode(modal.querySelector('#sov-dash-qr'), {
-                            text: res.recovery_phrase.join(' '),
-                            width: 180,
-                            height: 180,
-                            colorDark: '#000000',
-                            colorLight: '#ffffff',
-                            correctLevel: QRCode.CorrectLevel.H
-                        });
-                    }
-
-                    modal.querySelector('#sov-dash-close-modal').addEventListener('click', () => {
-                        document.body.removeChild(overlay);
-                        resolve();
-                    });
-                });
-            }
 
             setSuccess( cfg.i18n.successAdd );
             await loadDevices();

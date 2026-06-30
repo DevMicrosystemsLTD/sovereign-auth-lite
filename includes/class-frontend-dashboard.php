@@ -21,7 +21,7 @@ final class SovAuth_Frontend_Dashboard {
         wp_enqueue_script( 'sovereign-auth-dashboard', SOVAUTH_URL . 'assets/js/sovereign-auth-dashboard.js', [ 'qrcodejs' ], SOVAUTH_VER, true );
         
         wp_localize_script( 'sovereign-auth-dashboard', 'SovAuthDash', [
-            'isPremium'    => function_exists( 'sav_fs' ) && sav_fs()->can_use_premium_code(),
+            'isPremium'    => false,
             'api'          => esc_url( rest_url( 'sovereign-auth/v1' ) ),
             'nonce'        => wp_create_nonce( 'wp_rest' ),
             'powChallenge' => wp_create_nonce( 'sovauth_pow' ),

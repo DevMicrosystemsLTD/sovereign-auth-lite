@@ -19,15 +19,9 @@
  *            SovAuth_API_Exception + per-endpoint try/catch, all returning
  *            proper WP_REST_Response objects with correct HTTP status codes.
  *
- *  ARCH CHANGE — "Ultimate Recovery Suite": the PIN is gone entirely.
+ *  ARCH CHANGE — No recovery fallback.
  *            /user/create no longer collects or hashes a PIN.
- *            webauthn_reg_verify() now calls SovAuth_Backup_Auth::setup()
- *            (instead of setupWithHashedPin()) and returns a 12-word
- *            `recovery_phrase` array instead of `backup_token`. The client
- *            renders that phrase as both text and a QR code (the QR simply
- *            encodes the phrase string — there is no separate token).
- *            backup_verify() now accepts `phrase` (array of 12 words, or a
- *            single string) instead of `token` + `pin`.
+ *            The Lite version does not support recovery.
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -61,7 +55,7 @@ final class SovAuth_Rest_API {
         register_rest_route( self::NS, '/webauthn/register/verify',  [ 'methods' => 'POST',   'callback' => [ $this, 'webauthn_reg_verify'    ], ...$pub ] );
         register_rest_route( self::NS, '/webauthn/auth/options',     [ 'methods' => 'POST',   'callback' => [ $this, 'webauthn_auth_options'  ], ...$pub ] );
         register_rest_route( self::NS, '/webauthn/auth/verify',      [ 'methods' => 'POST',   'callback' => [ $this, 'webauthn_auth_verify'   ], ...$pub ] );
-        register_rest_route( self::NS, '/backup/verify',             [ 'methods' => 'POST',   'callback' => [ $this, 'backup_verify'          ], ...$pub ] );
+
         register_rest_route( self::NS, '/credentials',               [ 'methods' => 'GET',    'callback' => [ $this, 'credentials_list'       ], ...$aut ] );
         register_rest_route( self::NS, '/credentials/(?P<id>\d+)',   [ 'methods' => 'DELETE', 'callback' => [ $this, 'credentials_delete'     ], ...$aut ] );
     }
@@ -86,7 +80,7 @@ final class SovAuth_Rest_API {
                 throw new SovAuth_API_Exception( 'username_exists', 'Username already taken.', 409 );
             }
 
-            $isPremium = function_exists( 'sav_fs' ) && sav_fs()->can_use_premium_code();
+            $isPremium = false;
             if ( ! $isPremium ) {
                 if ( ! is_email( $email ) ) {
                     throw new SovAuth_API_Exception( 'invalid_email', __( 'A valid email address is required in the free version.', 'sovereign-auth' ), 400 );
@@ -96,9 +90,7 @@ final class SovAuth_Rest_API {
                 }
             }
 
-            // No PIN to collect anymore. The recovery phrase is generated
-            // entirely server-side, AFTER biometric registration succeeds
-            // (see webauthn_reg_verify() below) — the pending transient
+            // No PIN to collect anymore. The pending transient
             // only needs to remember the chosen username (and email).
             $pendingToken = bin2hex( random_bytes( 32 ) );
             $pendingHash  = hash( 'sha256', $pendingToken );
@@ -190,7 +182,7 @@ final class SovAuth_Rest_API {
 
                 // WebAuthn passed — NOW safe to create the WP user
                 $domain = wp_parse_url( get_site_url(), PHP_URL_HOST );
-                $isPremium = function_exists( 'sav_fs' ) && sav_fs()->can_use_premium_code();
+                $isPremium = false;
                 $userEmail = $isPremium ? ( $pendingData['username'] . '@noemail.' . $domain ) : $pendingData['email'];
 
                 $userId = wp_insert_user( [
@@ -207,12 +199,6 @@ final class SovAuth_Rest_API {
                 // Persist credential
                 $this->storeCredential( $userId, $credData, $deviceName, true );
 
-                // Generate the recovery phrase ONLY for Premium.
-                $recoveryPhrase = null;
-                if ( $isPremium ) {
-                    $backup         = new SovAuth_Backup_Auth();
-                    $recoveryPhrase = $backup->setup( $userId );
-                }
 
                 // Cleanup transient
                 delete_transient( 'sovauth_pending_' . $pendingHash );
@@ -224,7 +210,7 @@ final class SovAuth_Rest_API {
                 return new \WP_REST_Response( [
                     'success'         => true,
                     'credential_id'   => $credData['credential_id'],
-                    'recovery_phrase' => $recoveryPhrase,
+
                     'redirect'        => admin_url(),
                 ], 201 );
 
@@ -235,7 +221,7 @@ final class SovAuth_Rest_API {
                 }
 
                 $userId   = get_current_user_id();
-                $isPremium = function_exists( 'sav_fs' ) && sav_fs()->can_use_premium_code();
+                $isPremium = false;
                 if ( ! $isPremium ) {
                     global $wpdb;
                     $count = (int) $wpdb->get_var( $wpdb->prepare(
@@ -252,23 +238,12 @@ final class SovAuth_Rest_API {
 
                 $this->storeCredential( $userId, $credData, $deviceName, false );
 
-                $recoveryPhrase = null;
-                $isConfigured   = false;
-                if ( $isPremium ) {
-                    $backup = new SovAuth_Backup_Auth();
-                    if ( ! $backup->isConfigured( $userId ) ) {
-                        $recoveryPhrase = $backup->setup( $userId );
-                    } else {
-                        $isConfigured = true;
-                    }
-                }
+
 
                 return new \WP_REST_Response( [
                     'success'         => true,
                     'credential_id'   => $credData['credential_id'],
-                    'recovery_phrase' => $recoveryPhrase,
                     'is_premium'      => $isPremium,
-                    'is_configured'   => $isConfigured,
                 ], 200 );
             }
 
@@ -336,54 +311,6 @@ final class SovAuth_Rest_API {
         }
     }
 
-    /* ══════════════════════════════════════════════════════════
-       POST /backup/verify
-    ══════════════════════════════════════════════════════════ */
-
-    public function backup_verify( \WP_REST_Request $req ): \WP_REST_Response {
-        if ( ! function_exists( 'sav_fs' ) || ! sav_fs()->can_use_premium_code() ) {
-            return new \WP_REST_Response( [
-                'code'    => 'rest_forbidden',
-                'message' => __( 'Zero-Knowledge Recovery (12-word phrase / QR) is a Premium feature. Upgrade to Pro to use this feature.', 'sovereign-auth' ),
-                'data'    => [ 'status' => 403 ]
-            ], 403 );
-        }
-
-        try {
-            $this->enforcePoW( $req );
-            $this->ipRateLimit( 'backup_verify', 15, 300 );
-
-            $params   = $req->get_json_params();
-            $phrase   = $params['phrase'] ?? '';
-            $remember = (bool) ( $params['remember'] ?? false );
-
-            // Accept either a JSON array of 12 words (manual input boxes
-            // or a decoded-then-split QR) or a single string (textarea /
-            // raw QR payload) — sanitize element-by-element either way.
-            $phrase = is_array( $phrase )
-                ? array_map( 'sanitize_text_field', $phrase )
-                : sanitize_textarea_field( (string) $phrase );
-
-            $backup = new SovAuth_Backup_Auth();
-            $userId = $backup->verify( $phrase );
-            $user   = get_userdata( $userId );
-
-            if ( ! $user ) {
-                throw new SovAuth_API_Exception( 'user_not_found', 'User not found.', 500 );
-            }
-
-            wp_set_current_user( $userId );
-            wp_set_auth_cookie( $userId, $remember );
-            do_action( 'wp_login', $user->user_login, $user );
-
-            return new \WP_REST_Response( [ 'success' => true, 'redirect' => admin_url() ], 200 );
-
-        } catch ( SovAuth_API_Exception $e ) {
-            return $this->err( $e->apiCode, $e->getMessage(), $e->status );
-        } catch ( \Throwable $e ) {
-            return $this->err( 'backup_error', $e->getMessage(), 401 );
-        }
-    }
 
     /* ══════════════════════════════════════════════════════════
        GET /credentials
@@ -521,7 +448,7 @@ final class SovAuth_Rest_API {
      * FIX #6: throws SovAuth_API_Exception instead of wp_die().
      */
     private function ipRateLimit( string $action, int $limit, int $window ): void {
-        if ( ! function_exists( 'sav_fs' ) || ! sav_fs()->can_use_premium_code() ) {
+        if ( true ) {
             return; // Rate limit is Premium only
         }
         if ( get_option( 'sovauth_tor_mode' ) === 'yes' ) {
